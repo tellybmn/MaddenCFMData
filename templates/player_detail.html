@@ -1,0 +1,383 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div x-data="playerDetail({{ player_id }})" x-init="load()" class="space-y-6">
+
+  <!-- Loading -->
+  <div x-show="loading" class="flex items-center justify-center py-20">
+    <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-500"></div>
+  </div>
+
+  <template x-if="!loading && player">
+
+    <div class="space-y-6">
+
+      <!-- Header card -->
+      <div class="bg-slate-800 rounded-xl border border-slate-700 p-6">
+        <div class="flex flex-col sm:flex-row sm:items-start gap-6">
+          <!-- Big OVR badge -->
+          <div class="flex-shrink-0 w-20 h-20 rounded-xl flex items-center justify-center text-3xl font-black"
+            :class="(player.overall||0) >= 90 ? 'bg-yellow-900/60 text-yellow-300' :
+                    (player.overall||0) >= 80 ? 'bg-brand-700/60 text-brand-300' :
+                    (player.overall||0) >= 70 ? 'bg-blue-900/60 text-blue-300' : 'bg-slate-700 text-slate-400'"
+            x-text="player.overall || '—'"></div>
+
+          <div class="flex-1">
+            <h1 class="text-3xl font-black" x-text="player.full_name"></h1>
+            <div class="flex flex-wrap items-center gap-3 mt-2">
+              <span class="bg-slate-700 px-2 py-0.5 rounded text-sm font-bold" x-text="player.position"></span>
+              <a :href="player.team_id ? '/teams/' + player.team_id : '#'"
+                class="text-slate-300 hover:text-brand-500 transition-colors text-sm"
+                x-text="player.team_name || 'Free Agent'"></a>
+              <span x-show="player.jersey" class="text-slate-500 text-sm" x-text="'#' + player.jersey"></span>
+              <span class="badge-dev"
+                :class="{
+                  'bg-yellow-900/60 text-yellow-300': player.dev_trait === 'X-Factor',
+                  'bg-purple-900/60 text-purple-300': player.dev_trait === 'Star',
+                  'bg-blue-900/60 text-blue-300': player.dev_trait === 'Impact',
+                  'bg-slate-700 text-slate-400': player.dev_trait === 'Normal',
+                }"
+                x-text="player.dev_trait + ' Dev'"></span>
+              <span x-show="player.injury_status && player.injury_status !== 'None' && player.injury_status !== ''"
+                class="text-red-400 text-sm font-medium" x-text="'⚠ ' + player.injury_status"></span>
+            </div>
+            <div class="flex flex-wrap gap-4 mt-3 text-sm text-slate-400">
+              <span x-show="player.age" x-text="'Age ' + player.age"></span>
+              <span x-show="player.years_pro" x-text="player.years_pro + ' yr' + (player.years_pro !== 1 ? 's' : '') + ' pro'"></span>
+              <span x-show="player.contract_years_left" x-text="player.contract_years_left + 'yr contract left'"></span>
+              <span x-show="player.contract_salary"
+                x-text="'$' + (player.contract_salary / 1000000).toFixed(1) + 'M/yr'"></span>
+            </div>
+          </div>
+
+          <!-- Scout button -->
+          <div class="flex-shrink-0">
+            <a :href="player.team_id ? '/scouting/' + player.team_id : '#'"
+              class="inline-flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+              Scout Team →
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <!-- Stat tabs -->
+      <div x-data="{ tab: defaultTab() }" class="space-y-4">
+        <div class="flex flex-wrap gap-1">
+          <template x-for="t in availableTabs()" :key="t.key">
+            <button @click="tab = t.key"
+              :class="tab === t.key ? 'bg-brand-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'"
+              class="px-3 py-1.5 rounded text-sm font-medium transition-colors"
+              x-text="t.label"></button>
+          </template>
+        </div>
+
+        <!-- Passing -->
+        <div x-show="tab === 'passing'" class="space-y-4">
+          <div class="bg-slate-800 rounded-xl border border-slate-700 overflow-x-auto">
+            <div class="px-4 py-3 border-b border-slate-700 text-sm font-semibold text-slate-300">Season Stats</div>
+            <table class="w-full text-sm">
+              <thead><tr class="border-b border-slate-700">
+                <th class="table-header text-left px-4 py-2">Season</th>
+                <th class="table-header px-3 py-2">G</th><th class="table-header px-3 py-2">CMP</th>
+                <th class="table-header px-3 py-2">ATT</th><th class="table-header px-3 py-2">CMP%</th>
+                <th class="table-header px-3 py-2">YDS</th><th class="table-header px-3 py-2">TD</th>
+                <th class="table-header px-3 py-2">INT</th><th class="table-header px-3 py-2">SACK</th>
+                <th class="table-header px-3 py-2">RTG</th>
+              </tr></thead>
+              <tbody class="divide-y divide-slate-700/50">
+                <template x-for="r in player.season_passing" :key="r.season_index">
+                  <tr class="hover:bg-slate-700/30 transition-colors">
+                    <td class="px-4 py-2 text-slate-400" x-text="'Season ' + (r.season_index + 1)"></td>
+                    <td class="stat-cell px-3 py-2" x-text="r.games"></td>
+                    <td class="stat-cell px-3 py-2" x-text="r.completions"></td>
+                    <td class="stat-cell px-3 py-2" x-text="r.attempts"></td>
+                    <td class="stat-cell px-3 py-2" x-text="r.attempts ? (r.completions/r.attempts*100).toFixed(1)+'%' : '—'"></td>
+                    <td class="stat-cell px-3 py-2 font-medium text-white" x-text="r.yards"></td>
+                    <td class="stat-cell px-3 py-2 text-brand-500" x-text="r.tds"></td>
+                    <td class="stat-cell px-3 py-2 text-red-400" x-text="r.ints"></td>
+                    <td class="stat-cell px-3 py-2 text-slate-400" x-text="r.sacks"></td>
+                    <td class="stat-cell px-3 py-2 font-bold"
+                      :class="passRatingColor(calcPassRating(r))"
+                      x-text="calcPassRating(r).toFixed(1)"></td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+          <!-- Weekly game log -->
+          <div x-show="player.weekly_passing && player.weekly_passing.length > 0"
+            class="bg-slate-800 rounded-xl border border-slate-700 overflow-x-auto">
+            <div class="px-4 py-3 border-b border-slate-700 text-sm font-semibold text-slate-300">Game Log</div>
+            <table class="w-full text-sm">
+              <thead><tr class="border-b border-slate-700">
+                <th class="table-header text-left px-4 py-2">Wk</th>
+                <th class="table-header px-3 py-2">CMP</th><th class="table-header px-3 py-2">ATT</th>
+                <th class="table-header px-3 py-2">YDS</th><th class="table-header px-3 py-2">TD</th>
+                <th class="table-header px-3 py-2">INT</th><th class="table-header px-3 py-2">RTG</th>
+              </tr></thead>
+              <tbody class="divide-y divide-slate-700/50">
+                <template x-for="r in player.weekly_passing" :key="r.season_index + '_' + r.week">
+                  <tr class="hover:bg-slate-700/30 transition-colors">
+                    <td class="px-4 py-1.5 text-slate-400 text-xs">Wk <span x-text="r.week"></span></td>
+                    <td class="stat-cell px-3 py-1.5" x-text="r.completions"></td>
+                    <td class="stat-cell px-3 py-1.5" x-text="r.attempts"></td>
+                    <td class="stat-cell px-3 py-1.5 font-medium" x-text="r.yards"></td>
+                    <td class="stat-cell px-3 py-1.5 text-brand-500" x-text="r.tds"></td>
+                    <td class="stat-cell px-3 py-1.5 text-red-400" x-text="r.ints"></td>
+                    <td class="stat-cell px-3 py-1.5 font-bold" :class="passRatingColor(r.passer_rating)" x-text="r.passer_rating ? r.passer_rating.toFixed(1) : '—'"></td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Rushing -->
+        <div x-show="tab === 'rushing'">
+          <div class="bg-slate-800 rounded-xl border border-slate-700 overflow-x-auto">
+            <div class="px-4 py-3 border-b border-slate-700 text-sm font-semibold text-slate-300">Season Stats</div>
+            <table class="w-full text-sm">
+              <thead><tr class="border-b border-slate-700">
+                <th class="table-header text-left px-4 py-2">Season</th>
+                <th class="table-header px-3 py-2">G</th><th class="table-header px-3 py-2">ATT</th>
+                <th class="table-header px-3 py-2">YDS</th><th class="table-header px-3 py-2">AVG</th>
+                <th class="table-header px-3 py-2">TD</th><th class="table-header px-3 py-2">LONG</th>
+                <th class="table-header px-3 py-2">FUM</th><th class="table-header px-3 py-2">BRK</th>
+              </tr></thead>
+              <tbody class="divide-y divide-slate-700/50">
+                <template x-for="r in player.season_rushing" :key="r.season_index">
+                  <tr class="hover:bg-slate-700/30 transition-colors">
+                    <td class="px-4 py-2 text-slate-400" x-text="'Season ' + (r.season_index + 1)"></td>
+                    <td class="stat-cell px-3 py-2" x-text="r.games"></td>
+                    <td class="stat-cell px-3 py-2" x-text="r.attempts"></td>
+                    <td class="stat-cell px-3 py-2 font-medium text-white" x-text="r.yards"></td>
+                    <td class="stat-cell px-3 py-2" x-text="r.attempts ? (r.yards/r.attempts).toFixed(1) : '—'"></td>
+                    <td class="stat-cell px-3 py-2 text-brand-500" x-text="r.tds"></td>
+                    <td class="stat-cell px-3 py-2 text-slate-400" x-text="r.longest"></td>
+                    <td class="stat-cell px-3 py-2 text-red-400" x-text="r.fumbles_lost || 0"></td>
+                    <td class="stat-cell px-3 py-2 text-slate-400" x-text="r.broken_tackles || 0"></td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Receiving -->
+        <div x-show="tab === 'receiving'">
+          <div class="bg-slate-800 rounded-xl border border-slate-700 overflow-x-auto">
+            <div class="px-4 py-3 border-b border-slate-700 text-sm font-semibold text-slate-300">Season Stats</div>
+            <table class="w-full text-sm">
+              <thead><tr class="border-b border-slate-700">
+                <th class="table-header text-left px-4 py-2">Season</th>
+                <th class="table-header px-3 py-2">G</th><th class="table-header px-3 py-2">TGT</th>
+                <th class="table-header px-3 py-2">REC</th><th class="table-header px-3 py-2">YDS</th>
+                <th class="table-header px-3 py-2">AVG</th><th class="table-header px-3 py-2">TD</th>
+                <th class="table-header px-3 py-2">LONG</th><th class="table-header px-3 py-2">DROP</th>
+                <th class="table-header px-3 py-2">YAC</th><th class="table-header px-3 py-2">CTH%</th>
+              </tr></thead>
+              <tbody class="divide-y divide-slate-700/50">
+                <template x-for="r in player.season_receiving" :key="r.season_index">
+                  <tr class="hover:bg-slate-700/30 transition-colors">
+                    <td class="px-4 py-2 text-slate-400" x-text="'Season ' + (r.season_index + 1)"></td>
+                    <td class="stat-cell px-3 py-2" x-text="r.games"></td>
+                    <td class="stat-cell px-3 py-2 text-slate-400" x-text="r.targets"></td>
+                    <td class="stat-cell px-3 py-2" x-text="r.receptions"></td>
+                    <td class="stat-cell px-3 py-2 font-medium text-white" x-text="r.yards"></td>
+                    <td class="stat-cell px-3 py-2" x-text="r.receptions ? (r.yards/r.receptions).toFixed(1) : '—'"></td>
+                    <td class="stat-cell px-3 py-2 text-brand-500" x-text="r.tds"></td>
+                    <td class="stat-cell px-3 py-2 text-slate-400" x-text="r.longest"></td>
+                    <td class="stat-cell px-3 py-2 text-red-400" x-text="r.drops || 0"></td>
+                    <td class="stat-cell px-3 py-2 text-slate-400" x-text="r.yac || 0"></td>
+                    <td class="stat-cell px-3 py-2" x-text="r.targets ? (r.receptions/r.targets*100).toFixed(1)+'%' : '—'"></td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Defense -->
+        <div x-show="tab === 'defense'">
+          <div class="bg-slate-800 rounded-xl border border-slate-700 overflow-x-auto">
+            <div class="px-4 py-3 border-b border-slate-700 text-sm font-semibold text-slate-300">Season Stats</div>
+            <table class="w-full text-sm">
+              <thead><tr class="border-b border-slate-700">
+                <th class="table-header text-left px-4 py-2">Season</th>
+                <th class="table-header px-3 py-2">G</th>
+                <th class="table-header px-3 py-2">TOT</th><th class="table-header px-3 py-2">SOLO</th>
+                <th class="table-header px-3 py-2">ASST</th><th class="table-header px-3 py-2">TFL</th>
+                <th class="table-header px-3 py-2">SACK</th><th class="table-header px-3 py-2">INT</th>
+                <th class="table-header px-3 py-2">PBU</th><th class="table-header px-3 py-2">FF</th>
+                <th class="table-header px-3 py-2">FR</th><th class="table-header px-3 py-2">MISS</th>
+              </tr></thead>
+              <tbody class="divide-y divide-slate-700/50">
+                <template x-for="r in player.season_defense" :key="r.season_index">
+                  <tr class="hover:bg-slate-700/30 transition-colors">
+                    <td class="px-4 py-2 text-slate-400" x-text="'Season ' + (r.season_index + 1)"></td>
+                    <td class="stat-cell px-3 py-2" x-text="r.games"></td>
+                    <td class="stat-cell px-3 py-2 font-medium text-white" x-text="r.tackles_total"></td>
+                    <td class="stat-cell px-3 py-2" x-text="r.tackles_solo"></td>
+                    <td class="stat-cell px-3 py-2 text-slate-400" x-text="r.tackles_assist"></td>
+                    <td class="stat-cell px-3 py-2 text-yellow-400" x-text="r.tackles_for_loss"></td>
+                    <td class="stat-cell px-3 py-2 text-brand-500 font-bold" x-text="r.sacks"></td>
+                    <td class="stat-cell px-3 py-2 text-purple-400 font-bold" x-text="r.ints"></td>
+                    <td class="stat-cell px-3 py-2" x-text="r.pass_breakups"></td>
+                    <td class="stat-cell px-3 py-2 text-orange-400" x-text="r.forced_fumbles"></td>
+                    <td class="stat-cell px-3 py-2 text-slate-400" x-text="r.fumble_recoveries"></td>
+                    <td class="stat-cell px-3 py-2 text-red-400" x-text="r.missed_tackles"></td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Advanced Metrics -->
+        <div x-show="tab === 'advanced'" class="space-y-4">
+          <template x-for="am in player.advanced_metrics" :key="am.season_index">
+            <div class="bg-slate-800 rounded-xl border border-slate-700 p-4">
+              <h3 class="font-semibold text-slate-200 mb-3" x-text="'Season ' + (am.season_index + 1) + ' — Advanced Metrics'"></h3>
+              <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                <template x-for="[key, val] in metricEntries(am)" :key="key">
+                  <div class="bg-slate-700/50 rounded-lg p-3">
+                    <div class="text-xs text-slate-500 uppercase tracking-wider mb-1" x-text="formatMetricKey(key)"></div>
+                    <div class="text-lg font-bold" x-text="formatMetricVal(key, val)"></div>
+                  </div>
+                </template>
+              </div>
+            </div>
+          </template>
+          <div x-show="!player.advanced_metrics || player.advanced_metrics.length === 0"
+            class="text-slate-500 text-sm text-center py-8">
+            No advanced metrics computed yet. Import stat data to generate these.
+          </div>
+        </div>
+
+        <!-- Attributes -->
+        <div x-show="tab === 'attributes'">
+          <div class="bg-slate-800 rounded-xl border border-slate-700 p-4">
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-4" x-show="player.attribute_history && player.attribute_history.length > 0">
+              <template x-if="player.attribute_history && player.attribute_history.length > 0">
+                <template x-for="[attr, val] in attrEntries(player.attribute_history[player.attribute_history.length - 1])" :key="attr">
+                  <div class="flex items-center justify-between py-1.5 border-b border-slate-700/50">
+                    <span class="text-xs text-slate-400" x-text="formatAttrKey(attr)"></span>
+                    <span class="font-bold text-sm"
+                      :class="val >= 90 ? 'text-yellow-400' : val >= 80 ? 'text-brand-500' : val >= 70 ? 'text-blue-400' : 'text-slate-400'"
+                      x-text="val"></span>
+                  </div>
+                </template>
+              </template>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </template>
+
+</div>
+
+{% endblock %}
+{% block scripts %}
+<script>
+function playerDetail(id) {
+  return {
+    loading: true,
+    player: null,
+
+    async load() {
+      try {
+        const resp = await fetch('/api/players/' + id);
+        this.player = await resp.json();
+      } catch(e) { console.error(e); }
+      finally { this.loading = false; }
+    },
+
+    defaultTab() {
+      const pos = '{{ player_position }}';
+      if (['QB'].includes(pos)) return 'passing';
+      if (['HB','FB','RB'].includes(pos)) return 'rushing';
+      if (['WR','TE'].includes(pos)) return 'receiving';
+      if (['RE','LE','DT','LOLB','MLB','ROLB','CB','SS','FS'].includes(pos)) return 'defense';
+      return 'attributes';
+    },
+
+    availableTabs() {
+      if (!this.player) return [];
+      const tabs = [];
+      if ((this.player.season_passing||[]).length > 0) tabs.push({key:'passing', label:'Passing'});
+      if ((this.player.season_rushing||[]).length > 0) tabs.push({key:'rushing', label:'Rushing'});
+      if ((this.player.season_receiving||[]).length > 0) tabs.push({key:'receiving', label:'Receiving'});
+      if ((this.player.season_defense||[]).length > 0) tabs.push({key:'defense', label:'Defense'});
+      if ((this.player.season_kicking||[]).length > 0) tabs.push({key:'kicking', label:'Kicking'});
+      if ((this.player.season_punting||[]).length > 0) tabs.push({key:'punting', label:'Punting'});
+      tabs.push({key:'advanced', label:'Advanced'});
+      tabs.push({key:'attributes', label:'Attributes'});
+      return tabs;
+    },
+
+    calcPassRating(r) {
+      if (!r.attempts) return 0;
+      const a = Math.max(0, Math.min(((r.completions/r.attempts) - 0.3) * 5, 2.375));
+      const b = Math.max(0, Math.min(((r.yards/r.attempts) - 3) * 0.25, 2.375));
+      const c = Math.max(0, Math.min((r.tds/r.attempts) * 20, 2.375));
+      const d = Math.max(0, Math.min(2.375 - ((r.ints/r.attempts) * 25), 2.375));
+      return ((a + b + c + d) / 6) * 100;
+    },
+
+    passRatingColor(r) {
+      if (r >= 110) return 'text-yellow-400';
+      if (r >= 90)  return 'text-brand-500';
+      if (r >= 70)  return 'text-blue-400';
+      return 'text-red-400';
+    },
+
+    metricEntries(am) {
+      const skip = new Set(['season_index']);
+      return Object.entries(am).filter(([k,v]) => !skip.has(k) && v !== null && v !== undefined);
+    },
+
+    formatMetricKey(k) {
+      const labels = {
+        passer_rating: 'Pass RTG', any_a: 'ANY/A', ny_a: 'NY/A', y_a: 'Y/A',
+        completion_pct: 'CMP%', td_pct: 'TD%', int_pct: 'INT%', sack_pct: 'SACK%',
+        ypc: 'YPC', catch_rate: 'CTH%', y_tgt: 'Y/TGT', y_rec: 'Y/REC',
+        target_share: 'TGT SHR', drop_rate: 'DROP%', sacks_per_game: 'SACK/G',
+        tfl_per_game: 'TFL/G', missed_tackle_rate: 'MISS TKL%', fg_pct: 'FG%',
+      };
+      return labels[k] || k.replace(/_/g,' ').toUpperCase();
+    },
+
+    formatMetricVal(k, v) {
+      if (v === null || v === undefined) return '—';
+      const pctKeys = ['completion_pct','td_pct','int_pct','sack_pct','catch_rate','drop_rate',
+                       'target_share','rush_first_down_rate','rec_first_down_rate','fg_pct',
+                       'xp_pct','touchback_pct','inside_20_rate','broken_tackle_rate',
+                       'explosive_run_rate','stuff_rate','fumble_rate','pass_breakup_rate',
+                       'int_rate','missed_tackle_rate','forced_fumble_rate'];
+      if (pctKeys.includes(k)) return v.toFixed(1) + '%';
+      return parseFloat(v).toFixed(2).replace(/\.?0+$/, '') || '0';
+    },
+
+    attrEntries(snap) {
+      const skip = new Set(['week','week_index','season_index','team_id','overall','dev_trait']);
+      return Object.entries(snap||{}).filter(([k,v]) => !skip.has(k) && v !== null && typeof v === 'number');
+    },
+
+    formatAttrKey(k) {
+      const m = {speed:'SPD',acceleration:'ACC',agility:'AGI',strength:'STR',awareness:'AWR',
+        catching:'CTH',carrying:'CAR',jumping:'JMP',stamina:'STA',injury:'INJ',toughness:'TGH',
+        throw_power:'THP',throw_acc_short:'SAC',throw_acc_mid:'MAC',throw_acc_deep:'DAC',
+        throw_on_run:'TOR',break_tackle:'BTK',break_sack:'BSK',pass_block:'PBK',run_block:'RBK',
+        tackle:'TAK',hit_power:'HTP',man_coverage:'MCV',zone_coverage:'ZCV',press:'PRS',
+        kick_power:'KPW',kick_accuracy:'KAC',juke_move:'JKM',spin_move:'SPM',stiff_arm:'SFA',
+        trucking:'TRK',change_of_direction:'COD',spectacular_catch:'SPC',catch_in_traffic:'CIT',
+        short_route_running:'SRR',medium_route_running:'MRR',deep_route_running:'DRR',release:'RLS',
+      };
+      return m[k] || k.replace(/_/g,' ').toUpperCase().slice(0,4);
+    },
+  };
+}
+</script>
+{% endblock %}

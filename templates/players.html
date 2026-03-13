@@ -1,0 +1,205 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div x-data="playerBrowser()" x-init="load()" class="space-y-5">
+
+  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+    <h1 class="text-2xl font-bold">Players</h1>
+    <div class="text-sm text-slate-500" x-text="data.length + ' players loaded'"></div>
+  </div>
+
+  <!-- Filters -->
+  <div class="bg-slate-800 rounded-xl border border-slate-700 p-4">
+    <div class="flex flex-wrap gap-3">
+      <input x-model="filters.search" @input.debounce.300ms="applyFilters()"
+        placeholder="Search by name…"
+        class="flex-1 min-w-48 bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500" />
+
+      <select x-model="filters.position" @change="applyFilters()"
+        class="bg-slate-700 border border-slate-600 text-slate-200 text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500">
+        <option value="">All Positions</option>
+        {% for pos in positions %}
+        <option value="{{ pos }}">{{ pos }}</option>
+        {% endfor %}
+      </select>
+
+      <select x-model="filters.team_id" @change="applyFilters()"
+        class="bg-slate-700 border border-slate-600 text-slate-200 text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500">
+        <option value="">All Teams</option>
+        {% for team in nav_teams %}
+        <option value="{{ team.id }}">{{ team.abbr }} — {{ team.full }}</option>
+        {% endfor %}
+      </select>
+
+      <select x-model="filters.dev_trait" @change="applyFilters()"
+        class="bg-slate-700 border border-slate-600 text-slate-200 text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500">
+        <option value="">All Dev Traits</option>
+        <option value="X-Factor">X-Factor</option>
+        <option value="Star">Star</option>
+        <option value="Impact">Impact</option>
+        <option value="Normal">Normal</option>
+      </select>
+
+      <input x-model.number="filters.min_overall" @input.debounce.300ms="applyFilters()"
+        type="number" placeholder="Min OVR" min="0" max="99"
+        class="w-28 bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500" />
+
+      <button @click="clearFilters()" class="px-3 py-2 text-sm text-slate-400 hover:text-white transition-colors">
+        Clear
+      </button>
+    </div>
+  </div>
+
+  <!-- Loading -->
+  <div x-show="loading" class="flex items-center justify-center py-20">
+    <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-500"></div>
+  </div>
+
+  <!-- Table -->
+  <div x-show="!loading" class="bg-slate-800 rounded-xl border border-slate-700 overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="border-b border-slate-700">
+          <th class="table-header text-left px-4 py-3 sortable" @click="sort('last_name')">Name</th>
+          <th class="table-header px-3 py-3 sortable" @click="sort('position')">POS</th>
+          <th class="table-header text-left px-3 py-3">Team</th>
+          <th class="table-header px-3 py-3 sortable" @click="sort('overall')">OVR</th>
+          <th class="table-header px-3 py-3 sortable" @click="sort('age')">Age</th>
+          <th class="table-header px-3 py-3 sortable" @click="sort('dev_trait')">Dev</th>
+          <th class="table-header px-3 py-3">Contract</th>
+          <th class="table-header px-3 py-3">Status</th>
+          <th class="table-header px-3 py-3"></th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-700/50">
+        <template x-for="p in paged" :key="p.id">
+          <tr class="hover:bg-slate-700/40 transition-colors">
+            <td class="px-4 py-2.5">
+              <a :href="'/players/' + p.id"
+                class="font-medium text-white hover:text-brand-500 transition-colors"
+                x-text="p.full_name"></a>
+            </td>
+            <td class="stat-cell px-3 py-2.5">
+              <span class="inline-block bg-slate-700 px-1.5 py-0.5 rounded text-xs font-bold text-slate-300"
+                x-text="p.position"></span>
+            </td>
+            <td class="px-3 py-2.5">
+              <a :href="p.team_id ? '/teams/' + p.team_id : '#'"
+                class="text-sm text-slate-400 hover:text-brand-500 transition-colors"
+                x-text="p.team_abbr || '—'"></a>
+            </td>
+            <td class="stat-cell px-3 py-2.5">
+              <span class="font-bold"
+                :class="(p.overall||0) >= 90 ? 'text-yellow-400' : (p.overall||0) >= 80 ? 'text-brand-500' : (p.overall||0) >= 70 ? 'text-blue-400' : 'text-slate-400'"
+                x-text="p.overall || '—'"></span>
+            </td>
+            <td class="stat-cell px-3 py-2.5 text-slate-400" x-text="p.age || '—'"></td>
+            <td class="px-3 py-2.5">
+              <span x-show="p.dev_trait" class="badge-dev"
+                :class="{
+                  'bg-yellow-900/60 text-yellow-300': p.dev_trait === 'X-Factor',
+                  'bg-purple-900/60 text-purple-300': p.dev_trait === 'Star',
+                  'bg-blue-900/60 text-blue-300': p.dev_trait === 'Impact',
+                  'bg-slate-700 text-slate-400': p.dev_trait === 'Normal',
+                }"
+                x-text="p.dev_trait"></span>
+            </td>
+            <td class="px-3 py-2.5 text-xs text-slate-500"
+              x-text="p.contract_years_left ? p.contract_years_left + 'yr' : '—'"></td>
+            <td class="px-3 py-2.5">
+              <span x-show="p.injury_status && p.injury_status !== 'None' && p.injury_status !== ''"
+                class="text-xs text-red-400 font-medium" x-text="p.injury_status"></span>
+            </td>
+            <td class="px-3 py-2.5">
+              <a :href="'/players/' + p.id"
+                class="text-xs text-slate-400 hover:text-brand-500 transition-colors">View →</a>
+            </td>
+          </tr>
+        </template>
+        <tr x-show="filtered.length === 0 && !loading">
+          <td colspan="9" class="text-center py-12 text-slate-500">No players match your filters.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Pagination -->
+  <div x-show="!loading && filtered.length > pageSize" class="flex items-center justify-between text-sm">
+    <span class="text-slate-500" x-text="'Showing ' + (page * pageSize + 1) + '–' + Math.min((page + 1) * pageSize, filtered.length) + ' of ' + filtered.length"></span>
+    <div class="flex gap-2">
+      <button @click="page = Math.max(0, page - 1)" :disabled="page === 0"
+        class="px-3 py-1.5 bg-slate-700 rounded disabled:opacity-40 hover:bg-slate-600 transition-colors">←</button>
+      <button @click="page = Math.min(maxPage, page + 1)" :disabled="page >= maxPage"
+        class="px-3 py-1.5 bg-slate-700 rounded disabled:opacity-40 hover:bg-slate-600 transition-colors">→</button>
+    </div>
+  </div>
+
+</div>
+
+{% endblock %}
+{% block scripts %}
+<script>
+function playerBrowser() {
+  return {
+    loading: true,
+    data: [],
+    filtered: [],
+    page: 0,
+    pageSize: 50,
+    sortCol: 'overall',
+    sortDir: 'desc',
+    filters: { search: '', position: '{{ filter_position }}', team_id: '{{ filter_team_id }}', dev_trait: '', min_overall: '' },
+
+    async load() {
+      this.loading = true;
+      try {
+        const si = {{ selected_season or 'null' }};
+        const url = '/api/players?limit=2000' + (si !== null ? '&season_index=' + si : '');
+        const resp = await fetch(url);
+        this.data = await resp.json();
+        this.applyFilters();
+      } catch(e) {
+        console.error(e);
+      } finally {
+        this.loading = false;
+      }
+    },
+
+    applyFilters() {
+      this.page = 0;
+      let d = [...this.data];
+      if (this.filters.search)
+        d = d.filter(p => (p.full_name||'').toLowerCase().includes(this.filters.search.toLowerCase()));
+      if (this.filters.position)
+        d = d.filter(p => p.position === this.filters.position);
+      if (this.filters.team_id)
+        d = d.filter(p => p.team_id == this.filters.team_id);
+      if (this.filters.dev_trait)
+        d = d.filter(p => p.dev_trait === this.filters.dev_trait);
+      if (this.filters.min_overall)
+        d = d.filter(p => (p.overall||0) >= parseInt(this.filters.min_overall));
+      this.filtered = d.sort((a, b) => {
+        const av = a[this.sortCol] ?? (this.sortDir === 'desc' ? -Infinity : Infinity);
+        const bv = b[this.sortCol] ?? (this.sortDir === 'desc' ? -Infinity : Infinity);
+        if (typeof av === 'string') return this.sortDir === 'desc' ? bv.localeCompare(av) : av.localeCompare(bv);
+        return this.sortDir === 'desc' ? bv - av : av - bv;
+      });
+    },
+
+    sort(col) {
+      if (this.sortCol === col) this.sortDir = this.sortDir === 'desc' ? 'asc' : 'desc';
+      else { this.sortCol = col; this.sortDir = 'desc'; }
+      this.applyFilters();
+    },
+
+    clearFilters() {
+      this.filters = { search: '', position: '', team_id: '', dev_trait: '', min_overall: '' };
+      this.applyFilters();
+    },
+
+    get paged() { return this.filtered.slice(this.page * this.pageSize, (this.page + 1) * this.pageSize); },
+    get maxPage() { return Math.max(0, Math.ceil(this.filtered.length / this.pageSize) - 1); },
+  };
+}
+</script>
+{% endblock %}

@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:forums.operationsports.com)",
+      "WebFetch(domain:neonsportz.com)",
+      "WebFetch(domain:mymadden.com)",
+      "WebFetch(domain:daddyleagues.com)",
+      "WebFetch(domain:cfmstats.com)",
+      "WebFetch(domain:docs.maddenanalytics.com)",
+      "Bash(git -C /c/Users/tbeam/Documents/MaddenCFMData remote -v)",
+      "Bash(git -C /c/Users/tbeam/Documents/MaddenCFMData log --oneline -3)"
+    ]
+  }
+}

@@ -1,0 +1,331 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div x-data="teamDetail({{ team_id }}, {{ selected_season or 'null' }})" x-init="load()" class="space-y-6">
+
+  <div x-show="loading" class="flex items-center justify-center py-20">
+    <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-500"></div>
+  </div>
+
+  <template x-if="!loading && data">
+    <div class="space-y-6">
+
+      <!-- Header -->
+      <div class="bg-slate-800 rounded-xl border border-slate-700 p-6">
+        <div class="flex flex-col sm:flex-row sm:items-center gap-6">
+          <div class="flex-1">
+            <div class="text-sm text-slate-500 mb-1" x-text="data.team.division + ' · ' + data.team.conference"></div>
+            <h1 class="text-3xl font-black" x-text="data.team.full_name"></h1>
+            <div class="flex items-center gap-4 mt-3 text-lg">
+              <span class="font-bold text-white" x-text="data.record.wins + '-' + data.record.losses + (data.record.ties ? '-' + data.record.ties : '')"></span>
+              <span class="badge-dev"
+                :class="(data.record.streak||'')[0]==='W' ? 'bg-brand-700 text-brand-50' : 'bg-red-900/50 text-red-300'"
+                x-text="data.record.streak || '—'"></span>
+              <span class="text-slate-400 text-sm" x-text="'PF: ' + (data.record.points_for||0) + '  PA: ' + (data.record.points_against||0)"></span>
+            </div>
+          </div>
+          <div class="flex gap-2">
+            <a :href="'/scouting/' + data.team.team_id"
+              class="bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+              Scouting Report
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick metric cards -->
+      <div class="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 gap-3" x-show="data.advanced_metrics">
+        <template x-for="[label, val, col] in quickMetrics()" :key="label">
+          <div class="bg-slate-800 border border-slate-700 rounded-xl p-3 text-center">
+            <div class="text-xs text-slate-500 mb-1" x-text="label"></div>
+            <div class="text-xl font-black" :class="col" x-text="val || '—'"></div>
+          </div>
+        </template>
+      </div>
+
+      <!-- Tabs -->
+      <div x-data="{ tab: 'schedule' }" class="space-y-4">
+        <div class="flex flex-wrap gap-1">
+          <button @click="tab='schedule'" :class="tab==='schedule' ? 'bg-brand-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'" class="px-3 py-1.5 rounded text-sm font-medium transition-colors">Schedule</button>
+          <button @click="tab='offense'" :class="tab==='offense' ? 'bg-brand-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'" class="px-3 py-1.5 rounded text-sm font-medium transition-colors">Offense</button>
+          <button @click="tab='defense'" :class="tab==='defense' ? 'bg-brand-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'" class="px-3 py-1.5 rounded text-sm font-medium transition-colors">Defense</button>
+          <button @click="tab='roster'" :class="tab==='roster' ? 'bg-brand-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'" class="px-3 py-1.5 rounded text-sm font-medium transition-colors">Roster</button>
+          <button @click="tab='weekly'" :class="tab==='weekly' ? 'bg-brand-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'" class="px-3 py-1.5 rounded text-sm font-medium transition-colors">Week-by-Week</button>
+        </div>
+
+        <!-- Schedule -->
+        <div x-show="tab === 'schedule'">
+          <div class="bg-slate-800 rounded-xl border border-slate-700 overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead><tr class="border-b border-slate-700">
+                <th class="table-header text-left px-4 py-3">Week</th>
+                <th class="table-header px-3 py-3">H/A</th>
+                <th class="table-header text-left px-3 py-3">Opponent</th>
+                <th class="table-header px-3 py-3">Score</th>
+                <th class="table-header px-3 py-3">Result</th>
+              </tr></thead>
+              <tbody class="divide-y divide-slate-700/50">
+                <template x-for="g in data.schedule" :key="g.week">
+                  <tr class="hover:bg-slate-700/30 transition-colors">
+                    <td class="px-4 py-2.5 text-slate-400" x-text="'Week ' + g.week"></td>
+                    <td class="stat-cell px-3 py-2.5">
+                      <span :class="g.home_away==='H' ? 'text-brand-500' : 'text-slate-400'" x-text="g.home_away"></span>
+                    </td>
+                    <td class="px-3 py-2.5">
+                      <span class="font-medium" x-text="g.opponent_full"></span>
+                    </td>
+                    <td class="stat-cell px-3 py-2.5 text-slate-300" x-text="g.is_completed ? g.team_score + ' - ' + g.opp_score : '—'"></td>
+                    <td class="px-3 py-2.5">
+                      <span x-show="g.outcome" class="badge-dev font-bold"
+                        :class="g.outcome==='W' ? 'bg-brand-700 text-brand-50' : g.outcome==='L' ? 'bg-red-900/50 text-red-300' : 'bg-slate-600 text-slate-300'"
+                        x-text="g.outcome"></span>
+                      <span x-show="!g.outcome" class="text-slate-600 text-xs">Upcoming</span>
+                    </td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Offense stats -->
+        <div x-show="tab === 'offense'" class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div class="bg-slate-800 rounded-xl border border-slate-700 p-4 space-y-2">
+            <h3 class="font-semibold text-slate-300 mb-3">Season Totals</h3>
+            <template x-for="[label, val] in offenseRows()" :key="label">
+              <div class="flex justify-between items-center py-1.5 border-b border-slate-700/40">
+                <span class="text-sm text-slate-400" x-text="label"></span>
+                <span class="font-medium text-white" x-text="val || '—'"></span>
+              </div>
+            </template>
+          </div>
+          <div class="bg-slate-800 rounded-xl border border-slate-700 p-4 space-y-2">
+            <h3 class="font-semibold text-slate-300 mb-3">Advanced</h3>
+            <template x-for="[label, val] in advOffenseRows()" :key="label">
+              <div class="flex justify-between items-center py-1.5 border-b border-slate-700/40">
+                <span class="text-sm text-slate-400" x-text="label"></span>
+                <span class="font-medium text-white" x-text="val || '—'"></span>
+              </div>
+            </template>
+          </div>
+        </div>
+
+        <!-- Defense stats -->
+        <div x-show="tab === 'defense'" class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div class="bg-slate-800 rounded-xl border border-slate-700 p-4 space-y-2">
+            <h3 class="font-semibold text-slate-300 mb-3">Season Totals</h3>
+            <template x-for="[label, val] in defenseRows()" :key="label">
+              <div class="flex justify-between items-center py-1.5 border-b border-slate-700/40">
+                <span class="text-sm text-slate-400" x-text="label"></span>
+                <span class="font-medium text-white" x-text="val || '—'"></span>
+              </div>
+            </template>
+          </div>
+          <div class="bg-slate-800 rounded-xl border border-slate-700 p-4 space-y-2">
+            <h3 class="font-semibold text-slate-300 mb-3">Advanced</h3>
+            <template x-for="[label, val] in advDefenseRows()" :key="label">
+              <div class="flex justify-between items-center py-1.5 border-b border-slate-700/40">
+                <span class="text-sm text-slate-400" x-text="label"></span>
+                <span class="font-medium text-white" x-text="val || '—'"></span>
+              </div>
+            </template>
+          </div>
+        </div>
+
+        <!-- Roster -->
+        <div x-show="tab === 'roster'">
+          <div class="bg-slate-800 rounded-xl border border-slate-700 overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead><tr class="border-b border-slate-700">
+                <th class="table-header text-left px-4 py-3">Player</th>
+                <th class="table-header px-3 py-3">POS</th>
+                <th class="table-header px-3 py-3">OVR</th>
+                <th class="table-header px-3 py-3">Age</th>
+                <th class="table-header px-3 py-3">Dev</th>
+                <th class="table-header px-3 py-3">Status</th>
+              </tr></thead>
+              <tbody class="divide-y divide-slate-700/50">
+                <template x-for="p in data.roster" :key="p.player_id">
+                  <tr class="hover:bg-slate-700/30 transition-colors">
+                    <td class="px-4 py-2.5">
+                      <a :href="'/players/' + p.player_id"
+                        class="font-medium hover:text-brand-500 transition-colors"
+                        x-text="p.name"></a>
+                    </td>
+                    <td class="stat-cell px-3 py-2.5">
+                      <span class="bg-slate-700 px-1.5 py-0.5 rounded text-xs font-bold text-slate-300" x-text="p.position"></span>
+                    </td>
+                    <td class="stat-cell px-3 py-2.5 font-bold"
+                      :class="(p.overall||0)>=90 ? 'text-yellow-400' : (p.overall||0)>=80 ? 'text-brand-500' : (p.overall||0)>=70 ? 'text-blue-400' : 'text-slate-400'"
+                      x-text="p.overall||'—'"></td>
+                    <td class="stat-cell px-3 py-2.5 text-slate-400" x-text="p.age||'—'"></td>
+                    <td class="px-3 py-2.5">
+                      <span class="badge-dev text-xs"
+                        :class="{'bg-yellow-900/60 text-yellow-300':p.dev_trait==='X-Factor','bg-purple-900/60 text-purple-300':p.dev_trait==='Star','bg-blue-900/60 text-blue-300':p.dev_trait==='Impact','bg-slate-700 text-slate-500':p.dev_trait==='Normal'}"
+                        x-text="p.dev_trait"></span>
+                    </td>
+                    <td class="px-3 py-2.5">
+                      <span x-show="p.injury_status && p.injury_status !== 'None' && p.injury_status !== ''"
+                        class="text-xs text-red-400" x-text="p.injury_status"></span>
+                    </td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Week-by-week -->
+        <div x-show="tab === 'weekly'">
+          <div class="bg-slate-800 rounded-xl border border-slate-700 overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead><tr class="border-b border-slate-700">
+                <th class="table-header text-left px-4 py-3">Wk</th>
+                <th class="table-header px-3 py-3">PTS</th><th class="table-header px-3 py-3">YDS</th>
+                <th class="table-header px-3 py-3">PASS</th><th class="table-header px-3 py-3">RUSH</th>
+                <th class="table-header px-3 py-3">1ST</th><th class="table-header px-3 py-3">3RD</th>
+                <th class="table-header px-3 py-3">RZ</th><th class="table-header px-3 py-3">TO</th>
+                <th class="table-header px-3 py-3">SACK</th><th class="table-header px-3 py-3">INT(D)</th>
+              </tr></thead>
+              <tbody class="divide-y divide-slate-700/50">
+                <template x-for="r in data.weekly_stats" :key="r.week">
+                  <tr class="hover:bg-slate-700/30 transition-colors">
+                    <td class="px-4 py-2 text-slate-400" x-text="'Wk ' + r.week"></td>
+                    <td class="stat-cell px-3 py-2 font-bold text-white" x-text="r.points"></td>
+                    <td class="stat-cell px-3 py-2" x-text="r.total_yards"></td>
+                    <td class="stat-cell px-3 py-2" x-text="r.pass_yards"></td>
+                    <td class="stat-cell px-3 py-2" x-text="r.rush_yards"></td>
+                    <td class="stat-cell px-3 py-2" x-text="r.first_downs"></td>
+                    <td class="stat-cell px-3 py-2 text-xs text-slate-400"
+                      x-text="r.third_att ? r.third_conv + '/' + r.third_att : '—'"></td>
+                    <td class="stat-cell px-3 py-2 text-xs text-slate-400"
+                      x-text="r.rz_att ? r.rz_tds + ' TD/' + r.rz_att : '—'"></td>
+                    <td class="stat-cell px-3 py-2 text-red-400" x-text="r.turnovers||0"></td>
+                    <td class="stat-cell px-3 py-2 text-red-400" x-text="r.sacks_allowed||0"></td>
+                    <td class="stat-cell px-3 py-2 text-brand-500" x-text="r.def_ints||0"></td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </template>
+
+</div>
+
+{% endblock %}
+{% block scripts %}
+<script>
+function teamDetail(teamId, si) {
+  return {
+    loading: true,
+    data: null,
+
+    async load() {
+      try {
+        const url = '/api/teams/' + teamId + (si !== null ? '?season_index=' + si : '');
+        const resp = await fetch(url);
+        this.data = await resp.json();
+      } catch(e) { console.error(e); }
+      finally { this.loading = false; }
+    },
+
+    quickMetrics() {
+      const m = this.data?.advanced_metrics || {};
+      const fmt = (v, d=1) => v !== undefined && v !== null ? parseFloat(v).toFixed(d) : null;
+      return [
+        ['PPG', fmt(m.points_per_game), 'text-brand-500'],
+        ['PAPG', fmt(m.points_allowed_per_game), 'text-red-400'],
+        ['YPP', fmt(m.yards_per_play, 2), 'text-blue-400'],
+        ['ANY/A', fmt(m.any_a, 2), 'text-purple-400'],
+        ['3D%', m.third_down_conv_rate ? fmt(m.third_down_conv_rate)+'%' : null, 'text-yellow-400'],
+        ['PYTH', m.pythagorean_win_pct ? fmt(m.pythagorean_win_pct*100)+'%' : null, 'text-white'],
+        ['SRS', m.srs ? (m.srs>0?'+':'')+fmt(m.srs) : null, m.srs >= 0 ? 'text-brand-500' : 'text-red-400'],
+        ['+/-TO', m.turnover_differential !== undefined ? (m.turnover_differential>0?'+':'')+m.turnover_differential : null,
+          (m.turnover_differential||0)>=0 ? 'text-brand-500' : 'text-red-400'],
+      ];
+    },
+
+    offenseRows() {
+      const o = this.data?.season_offense || {};
+      const g = o.games || 1;
+      return [
+        ['Games', o.games],
+        ['Points', o.points],
+        ['Points/Game', o.points ? (o.points/g).toFixed(1) : null],
+        ['Total Yards', o.total_yards],
+        ['Pass Yards', o.pass_yards],
+        ['Rush Yards', o.rush_yards],
+        ['Pass Att/Cmp', o.pass_att ? o.pass_cmp + '/' + o.pass_att : null],
+        ['Pass TDs / INTs', o.pass_tds !== undefined ? o.pass_tds + ' / ' + o.pass_ints : null],
+        ['Sacks Allowed', o.sacks_allowed],
+        ['Rush Att / TDs', o.rush_att ? o.rush_att + ' att, ' + o.rush_tds + ' TD' : null],
+        ['First Downs', o.first_downs],
+        ['3rd Downs', o.third_att ? o.third_conv + '/' + o.third_att : null],
+        ['4th Downs', o.fourth_att ? o.fourth_conv + '/' + o.fourth_att : null],
+        ['Red Zone', o.rz_att ? o.rz_tds + ' TD / ' + o.rz_fgs + ' FG / ' + o.rz_att + ' trips' : null],
+        ['Turnovers', o.turnovers],
+        ['Penalties', o.penalties ? o.penalties + ' for ' + o.penalty_yards + ' yds' : null],
+      ].filter(r => r[1] !== null && r[1] !== undefined);
+    },
+
+    advOffenseRows() {
+      const m = this.data?.advanced_metrics || {};
+      const fmt = (v, d=1) => v !== undefined && v !== null ? parseFloat(v).toFixed(d) : null;
+      return [
+        ['Yards/Play', fmt(m.yards_per_play, 2)],
+        ['ANY/A', fmt(m.any_a, 2)],
+        ['NY/A', fmt(m.ny_a, 2)],
+        ['Passer Rating', fmt(m.passer_rating)],
+        ['Completion%', m.completion_pct ? fmt(m.completion_pct)+'%' : null],
+        ['Rush YPC', fmt(m.rush_ypc, 2)],
+        ['3rd Down Conv%', m.third_down_conv_rate ? fmt(m.third_down_conv_rate)+'%' : null],
+        ['4th Down Conv%', m.fourth_down_conv_rate ? fmt(m.fourth_down_conv_rate)+'%' : null],
+        ['RZ TD Rate', m.rz_td_rate ? fmt(m.rz_td_rate)+'%' : null],
+        ['RZ Score Rate', m.rz_scoring_rate ? fmt(m.rz_scoring_rate)+'%' : null],
+        ['Explosive Play%', m.explosive_play_rate ? fmt(m.explosive_play_rate)+'%' : null],
+        ['Pass Ratio', m.pass_ratio ? fmt(m.pass_ratio)+'% pass' : null],
+        ['Turnover Rate', m.turnover_rate ? fmt(m.turnover_rate, 3) : null],
+        ['Points/Drive', fmt(m.points_per_drive, 2)],
+        ['Yards/Drive', fmt(m.yards_per_drive)],
+      ].filter(r => r[1] !== null && r[1] !== undefined);
+    },
+
+    defenseRows() {
+      const d = this.data?.season_defense || {};
+      return [
+        ['Points Allowed', d.points_allowed],
+        ['Sacks', d.def_sacks],
+        ['INTs', d.def_ints],
+        ['Forced Fumbles', d.def_forced_fumbles],
+        ['Fumble Recoveries', d.def_fumble_recoveries],
+        ['Total Tackles', d.def_total_tackles],
+        ['Tackles for Loss', d.def_tfl],
+        ['Safeties', d.def_safeties],
+      ].filter(r => r[1] !== null && r[1] !== undefined);
+    },
+
+    advDefenseRows() {
+      const m = this.data?.advanced_metrics || {};
+      const fmt = (v, d=1) => v !== undefined && v !== null ? parseFloat(v).toFixed(d) : null;
+      return [
+        ['Points Allowed/G', fmt(m.points_allowed_per_game)],
+        ['Yards Allowed/Play', fmt(m.yards_allowed_per_play, 2)],
+        ['Pass Yds Allowed/G', fmt(m.pass_yards_allowed_per_game)],
+        ['Rush Yds Allowed/G', fmt(m.rush_yards_allowed_per_game)],
+        ['Sack Rate', m.sack_rate ? fmt(m.sack_rate)+'%' : null],
+        ['Opp Passer Rating', fmt(m.opp_passer_rating)],
+        ['Opp YPC', fmt(m.opp_ypc, 2)],
+        ['3rd Down Stop%', m.third_down_stop_rate ? fmt(m.third_down_stop_rate)+'%' : null],
+        ['RZ Stop Rate', m.rz_stop_rate ? fmt(m.rz_stop_rate)+'%' : null],
+        ['Takeaways/Game', fmt(m.takeaways_per_game, 2)],
+        ['TO Forced Rate', m.turnover_forced_rate ? fmt(m.turnover_forced_rate, 3) : null],
+      ].filter(r => r[1] !== null && r[1] !== undefined);
+    },
+  };
+}
+</script>
+{% endblock %}

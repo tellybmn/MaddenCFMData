@@ -1,0 +1,215 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div x-data="metricsLeaders({{ selected_season or 'null' }})" x-init="load()" class="space-y-6">
+
+  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+    <div>
+      <h1 class="text-2xl font-bold">Advanced Metrics</h1>
+      <p class="text-sm text-slate-500 mt-1">Season leaders and leaderboards for all advanced stats</p>
+    </div>
+  </div>
+
+  <!-- Category selector -->
+  <div class="flex flex-wrap gap-2">
+    <template x-for="cat in categories" :key="cat.key">
+      <button @click="category = cat.key; loadLeaders()"
+        :class="category === cat.key ? 'bg-brand-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'"
+        class="px-3 py-1.5 rounded text-sm font-medium transition-colors"
+        x-text="cat.label"></button>
+    </template>
+  </div>
+
+  <!-- Metric picker for current category -->
+  <div class="bg-slate-800 rounded-xl border border-slate-700 p-4">
+    <div class="flex flex-wrap gap-2">
+      <template x-for="m in currentMetrics" :key="m.key">
+        <button @click="metric = m.key; loadLeaders()"
+          :class="metric === m.key ? 'bg-slate-600 text-white border-brand-500' : 'bg-slate-700 text-slate-400 hover:text-white border-slate-600'"
+          class="px-3 py-1 rounded border text-xs font-medium transition-colors"
+          x-text="m.label"></button>
+      </template>
+    </div>
+  </div>
+
+  <!-- Leaderboard table -->
+  <div class="bg-slate-800 rounded-xl border border-slate-700 overflow-x-auto">
+    <div class="px-4 py-3 border-b border-slate-700 flex items-center justify-between">
+      <div>
+        <span class="font-semibold text-slate-200" x-text="currentMetricLabel"></span>
+        <span class="ml-2 text-sm text-slate-500" x-text="positionFilter ? '(' + positionFilter + ')' : '(All Positions)'"></span>
+      </div>
+      <select x-model="positionFilter" @change="loadLeaders()"
+        class="bg-slate-700 border border-slate-600 text-slate-200 text-xs rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-brand-500">
+        <option value="">All Positions</option>
+        <option value="QB">QB</option><option value="HB">HB</option>
+        <option value="WR">WR</option><option value="TE">TE</option>
+        <option value="RE">RE</option><option value="LE">LE</option>
+        <option value="DT">DT</option><option value="LOLB">LOLB</option>
+        <option value="MLB">MLB</option><option value="ROLB">ROLB</option>
+        <option value="CB">CB</option><option value="SS">SS</option><option value="FS">FS</option>
+        <option value="K">K</option><option value="P">P</option>
+      </select>
+    </div>
+
+    <div x-show="loadingLeaders" class="flex justify-center py-10">
+      <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-brand-500"></div>
+    </div>
+
+    <table x-show="!loadingLeaders" class="w-full text-sm">
+      <thead><tr class="border-b border-slate-700">
+        <th class="table-header text-left px-4 py-3 w-10">#</th>
+        <th class="table-header text-left px-3 py-3">Player</th>
+        <th class="table-header px-3 py-3">POS</th>
+        <th class="table-header px-3 py-3">Team</th>
+        <th class="table-header px-3 py-3" x-text="currentMetricLabel"></th>
+      </tr></thead>
+      <tbody class="divide-y divide-slate-700/50">
+        <template x-for="r in leaders" :key="r.rank">
+          <tr class="hover:bg-slate-700/30 transition-colors">
+            <td class="px-4 py-2.5 text-slate-500 font-mono" x-text="r.rank"></td>
+            <td class="px-3 py-2.5">
+              <a :href="'/players/' + r.player_id"
+                class="font-medium text-white hover:text-brand-500 transition-colors"
+                x-text="r.name"></a>
+            </td>
+            <td class="stat-cell px-3 py-2.5">
+              <span class="bg-slate-700 px-1.5 py-0.5 rounded text-xs font-bold text-slate-300" x-text="r.position"></span>
+            </td>
+            <td class="stat-cell px-3 py-2.5 text-slate-400" x-text="r.team"></td>
+            <td class="stat-cell px-3 py-2.5 font-bold text-brand-400"
+              x-text="formatVal(r[metric], metric)"></td>
+          </tr>
+        </template>
+        <tr x-show="leaders.length === 0">
+          <td colspan="5" class="text-center py-12 text-slate-500">No data available. Import stat exports to populate leaderboards.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+</div>
+
+{% endblock %}
+{% block scripts %}
+<script>
+function metricsLeaders(si) {
+  return {
+    si,
+    loading: false,
+    loadingLeaders: false,
+    leaders: [],
+    category: 'passing',
+    metric: 'any_a',
+    positionFilter: '',
+
+    categories: [
+      { key: 'passing',   label: 'Passing' },
+      { key: 'rushing',   label: 'Rushing' },
+      { key: 'receiving', label: 'Receiving' },
+      { key: 'defense',   label: 'Defense' },
+      { key: 'kicking',   label: 'Kicking' },
+      { key: 'composite', label: 'Composite' },
+    ],
+
+    metricMap: {
+      passing: [
+        {key:'any_a',           label:'ANY/A'},
+        {key:'passer_rating',   label:'Passer Rating'},
+        {key:'ny_a',            label:'NY/A'},
+        {key:'y_a',             label:'Y/Attempt'},
+        {key:'completion_pct',  label:'Completion%'},
+        {key:'td_pct',          label:'TD%'},
+        {key:'int_pct',         label:'INT% (lower=better)'},
+        {key:'sack_pct',        label:'Sack% (lower=better)'},
+        {key:'air_yards_per_att',label:'Air Yards/Att'},
+        {key:'yac_per_cmp',     label:'YAC/Completion'},
+        {key:'pass_first_down_rate', label:'Pass 1st Down%'},
+      ],
+      rushing: [
+        {key:'ypc',                  label:'Yards/Carry'},
+        {key:'rush_td_rate',         label:'TD Rate'},
+        {key:'rush_first_down_rate', label:'1st Down Rate'},
+        {key:'broken_tackle_rate',   label:'Broken Tackle Rate'},
+        {key:'fumble_rate',          label:'Fumble Rate (lower=better)'},
+      ],
+      receiving: [
+        {key:'y_tgt',           label:'Yards/Target'},
+        {key:'y_rec',           label:'Yards/Reception'},
+        {key:'catch_rate',      label:'Catch Rate'},
+        {key:'target_share',    label:'Target Share%'},
+        {key:'yac_per_rec',     label:'YAC/Reception'},
+        {key:'drop_rate',       label:'Drop Rate (lower=better)'},
+        {key:'air_yards_per_tgt', label:'Air Yards/Target'},
+        {key:'rec_first_down_rate', label:'1st Down Rate'},
+        {key:'rec_td_rate',     label:'TD Rate'},
+      ],
+      defense: [
+        {key:'sacks_per_game',         label:'Sacks/Game'},
+        {key:'tfl_per_game',           label:'TFL/Game'},
+        {key:'forced_fumble_rate',     label:'Forced Fumble Rate'},
+        {key:'passer_rating_allowed',  label:'Passer Rating Allowed'},
+        {key:'coverage_yards_per_target', label:'Cov Yards/Target'},
+        {key:'missed_tackle_rate',     label:'Missed Tackle% (lower=better)'},
+      ],
+      kicking: [
+        {key:'fg_pct',      label:'FG%'},
+        {key:'fg_pct_40_49', label:'FG% 40-49'},
+        {key:'fg_pct_50_plus', label:'FG% 50+'},
+        {key:'xp_pct',      label:'XP%'},
+        {key:'touchback_pct', label:'Touchback%'},
+        {key:'kickoff_avg', label:'Kickoff Average'},
+        {key:'gross_punt_avg', label:'Gross Punt Avg'},
+        {key:'net_punt_avg',  label:'Net Punt Avg'},
+        {key:'inside_20_rate', label:'Inside-20 Rate'},
+      ],
+      composite: [
+        {key:'passer_rating',  label:'Passer Rating (All)'},
+        {key:'ypc',            label:'Yards/Carry (All)'},
+        {key:'y_tgt',          label:'Yards/Target (All)'},
+        {key:'fumble_rate',    label:'Fumble Rate (lower=better)'},
+      ],
+    },
+
+    get currentMetrics() {
+      return this.metricMap[this.category] || [];
+    },
+
+    get currentMetricLabel() {
+      return this.currentMetrics.find(m => m.key === this.metric)?.label || this.metric;
+    },
+
+    async load() {
+      this.loadLeaders();
+    },
+
+    async loadLeaders() {
+      this.loadingLeaders = true;
+      try {
+        let url = '/api/players/leaders/' + this.metric + '?limit=30';
+        if (this.si !== null) url += '&season_index=' + this.si;
+        if (this.positionFilter) url += '&position=' + this.positionFilter;
+        const resp = await fetch(url);
+        this.leaders = await resp.json();
+      } catch(e) {
+        console.error(e);
+        this.leaders = [];
+      } finally {
+        this.loadingLeaders = false;
+      }
+    },
+
+    formatVal(v, key) {
+      if (v === null || v === undefined) return '—';
+      const pctKeys = ['completion_pct','td_pct','int_pct','sack_pct','catch_rate','drop_rate',
+        'target_share','rush_first_down_rate','rec_first_down_rate','fg_pct','fg_pct_30_39',
+        'fg_pct_40_49','fg_pct_50_plus','xp_pct','touchback_pct','inside_20_rate',
+        'broken_tackle_rate','fumble_rate','rush_td_rate','rec_td_rate','pass_first_down_rate',
+        'missed_tackle_rate','forced_fumble_rate'];
+      if (pctKeys.includes(key)) return parseFloat(v).toFixed(1) + '%';
+      return parseFloat(v).toFixed(2);
+    },
+  };
+}
+</script>
+{% endblock %}

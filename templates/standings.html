@@ -1,0 +1,207 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div x-data="standings()" x-init="load()" class="space-y-6">
+
+  <!-- Header -->
+  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+    <div>
+      <h1 class="text-2xl font-bold">League Standings</h1>
+      <p class="text-sm text-slate-500 mt-1">Season {{ (selected_season or 0) + 1 }}</p>
+    </div>
+    <div class="flex items-center gap-2">
+      <button @click="view='flat'" :class="view==='flat' ? 'bg-brand-600 text-white' : 'bg-slate-700 text-slate-300'"
+        class="px-3 py-1.5 rounded text-sm font-medium transition-colors">All Teams</button>
+      <button @click="view='division'" :class="view==='division' ? 'bg-brand-600 text-white' : 'bg-slate-700 text-slate-300'"
+        class="px-3 py-1.5 rounded text-sm font-medium transition-colors">By Division</button>
+    </div>
+  </div>
+
+  <!-- Loading state -->
+  <div x-show="loading" class="flex items-center justify-center py-20">
+    <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-500"></div>
+  </div>
+
+  <!-- Error state -->
+  <div x-show="error" x-cloak class="bg-red-900/30 border border-red-800 rounded-lg p-4 text-red-300 text-sm" x-text="error"></div>
+
+  <!-- Flat view — all teams sortable -->
+  <div x-show="!loading && view === 'flat'" x-cloak>
+    <div class="bg-slate-800 rounded-xl border border-slate-700 overflow-x-auto">
+      <table id="standings-table" class="w-full text-sm">
+        <thead>
+          <tr class="border-b border-slate-700">
+            <th class="table-header text-left px-4 py-3">Team</th>
+            <th class="table-header px-3 py-3 sortable" @click="sort('wins')">W</th>
+            <th class="table-header px-3 py-3 sortable" @click="sort('losses')">L</th>
+            <th class="table-header px-3 py-3 sortable" @click="sort('ties')">T</th>
+            <th class="table-header px-3 py-3 sortable" @click="sort('win_pct')">PCT</th>
+            <th class="table-header px-3 py-3 sortable" @click="sort('points_for')">PF</th>
+            <th class="table-header px-3 py-3 sortable" @click="sort('points_against')">PA</th>
+            <th class="table-header px-3 py-3 sortable" @click="sort('point_diff')">DIFF</th>
+            <th class="table-header px-3 py-3">DIV</th>
+            <th class="table-header px-3 py-3">CONF</th>
+            <th class="table-header px-3 py-3 sortable" @click="sort('pythagorean_win_pct')" title="Pythagorean Win%">PYTH</th>
+            <th class="table-header px-3 py-3 sortable" @click="sort('srs')" title="Simple Rating System">SRS</th>
+            <th class="table-header px-3 py-3 sortable" @click="sort('ppg')">PPG</th>
+            <th class="table-header px-3 py-3 sortable" @click="sort('papg')">PAPG</th>
+            <th class="table-header px-3 py-3 sortable" @click="sort('third_pct')" title="3rd Down Conv%">3D%</th>
+            <th class="table-header px-3 py-3 sortable" @click="sort('turnover_diff')">+/-TO</th>
+            <th class="table-header px-3 py-3">STRK</th>
+            <th class="table-header px-3 py-3 text-left">SCOUT</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-700/50">
+          <template x-for="(t, i) in sorted" :key="t.team_id">
+            <tr class="hover:bg-slate-700/40 transition-colors">
+              <td class="px-4 py-3">
+                <div class="flex items-center gap-2">
+                  <span class="text-xs text-slate-500 w-5" x-text="i+1"></span>
+                  <div>
+                    <a :href="'/teams/' + t.team_id"
+                      class="font-semibold text-white hover:text-brand-500 transition-colors"
+                      x-text="t.team_name"></a>
+                    <div class="text-xs text-slate-500" x-text="t.division"></div>
+                  </div>
+                </div>
+              </td>
+              <td class="stat-cell px-3 py-3 font-semibold text-white" x-text="t.wins"></td>
+              <td class="stat-cell px-3 py-3" x-text="t.losses"></td>
+              <td class="stat-cell px-3 py-3" x-text="t.ties"></td>
+              <td class="stat-cell px-3 py-3 font-medium"
+                :class="t.win_pct >= 0.6 ? 'text-brand-500' : t.win_pct < 0.4 ? 'text-red-400' : 'text-slate-300'"
+                x-text="t.win_pct ? t.win_pct.toFixed(3) : '—'"></td>
+              <td class="stat-cell px-3 py-3" x-text="t.points_for"></td>
+              <td class="stat-cell px-3 py-3" x-text="t.points_against"></td>
+              <td class="stat-cell px-3 py-3"
+                :class="t.point_diff > 0 ? 'text-brand-500' : t.point_diff < 0 ? 'text-red-400' : ''"
+                x-text="(t.point_diff > 0 ? '+' : '') + (t.point_diff || 0)"></td>
+              <td class="stat-cell px-3 py-3 text-slate-400 text-xs" x-text="t.div_record"></td>
+              <td class="stat-cell px-3 py-3 text-slate-400 text-xs" x-text="t.conf_record"></td>
+              <td class="stat-cell px-3 py-3 text-slate-300"
+                x-text="t.pythagorean_win_pct ? (t.pythagorean_win_pct * 100).toFixed(1) + '%' : '—'"></td>
+              <td class="stat-cell px-3 py-3"
+                :class="(t.srs || 0) > 0 ? 'text-brand-500' : (t.srs || 0) < 0 ? 'text-red-400' : ''"
+                x-text="t.srs ? (t.srs > 0 ? '+' : '') + t.srs.toFixed(1) : '—'"></td>
+              <td class="stat-cell px-3 py-3" x-text="t.ppg ? t.ppg.toFixed(1) : '—'"></td>
+              <td class="stat-cell px-3 py-3" x-text="t.papg ? t.papg.toFixed(1) : '—'"></td>
+              <td class="stat-cell px-3 py-3" x-text="t.third_pct ? t.third_pct.toFixed(1) + '%' : '—'"></td>
+              <td class="stat-cell px-3 py-3"
+                :class="(t.turnover_diff || 0) > 0 ? 'text-brand-500' : (t.turnover_diff || 0) < 0 ? 'text-red-400' : ''"
+                x-text="t.turnover_diff !== null ? (t.turnover_diff > 0 ? '+' : '') + t.turnover_diff : '—'"></td>
+              <td class="px-3 py-3">
+                <span class="badge-dev"
+                  :class="t.streak && t.streak[0] === 'W' ? 'bg-brand-700 text-brand-50' : 'bg-red-900/50 text-red-300'"
+                  x-text="t.streak || '—'"></span>
+              </td>
+              <td class="px-3 py-3">
+                <a :href="'/scouting/' + t.team_id"
+                  class="text-xs text-slate-400 hover:text-brand-500 transition-colors font-medium">Scout →</a>
+              </td>
+            </tr>
+          </template>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Legend -->
+    <div class="flex flex-wrap gap-4 mt-3 text-xs text-slate-500">
+      <span>PYTH = Pythagorean Win%</span>
+      <span>SRS = Simple Rating System (higher = better, 0 = league avg)</span>
+      <span>3D% = 3rd Down Conversion Rate</span>
+      <span>+/-TO = Turnover Differential</span>
+    </div>
+  </div>
+
+  <!-- Division view -->
+  <div x-show="!loading && view === 'division'" x-cloak class="space-y-8">
+    <template x-for="(divs, conf) in byDivision" :key="conf">
+      <div>
+        <h2 class="text-lg font-bold text-slate-200 mb-4 pb-2 border-b border-slate-700"
+          x-text="conf + ' Conference'"></h2>
+        <div class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-4">
+          <template x-for="(teams, div) in divs" :key="div">
+            <div class="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
+              <div class="px-4 py-2.5 bg-slate-700/50 border-b border-slate-600">
+                <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider" x-text="div"></h3>
+              </div>
+              <div class="divide-y divide-slate-700/50">
+                <template x-for="(t, i) in teams" :key="t.team_id">
+                  <div class="px-4 py-3 flex items-center justify-between hover:bg-slate-700/30 transition-colors">
+                    <div class="flex items-center gap-2">
+                      <span class="text-xs text-slate-600 w-4" x-text="i+1"></span>
+                      <div>
+                        <a :href="'/teams/' + t.team_id"
+                          class="text-sm font-medium hover:text-brand-500 transition-colors"
+                          x-text="t.abbreviation"></a>
+                        <div class="text-xs text-slate-500" x-text="t.team_name"></div>
+                      </div>
+                    </div>
+                    <div class="text-right">
+                      <div class="font-semibold text-sm" x-text="t.wins + '-' + t.losses + (t.ties ? '-' + t.ties : '')"></div>
+                      <div class="text-xs text-slate-500" x-text="t.win_pct ? t.win_pct.toFixed(3) : '—'"></div>
+                    </div>
+                  </div>
+                </template>
+              </div>
+            </div>
+          </template>
+        </div>
+      </div>
+    </template>
+  </div>
+
+</div>
+
+{% endblock %}
+{% block scripts %}
+<script>
+function standings() {
+  return {
+    loading: true,
+    error: null,
+    data: [],
+    view: 'flat',
+    sortCol: 'win_pct',
+    sortDir: 'desc',
+    byDivision: {},
+
+    async load() {
+      this.loading = true;
+      this.error = null;
+      try {
+        const si = {{ selected_season or 'null' }};
+        const url = '/api/standings' + (si !== null ? '?season_index=' + si : '');
+        const resp = await fetch(url);
+        this.data = await resp.json();
+        // Division view
+        const divUrl = '/api/standings/division' + (si !== null ? '?season_index=' + si : '');
+        const divResp = await fetch(divUrl);
+        this.byDivision = await divResp.json();
+      } catch(e) {
+        this.error = 'Failed to load standings: ' + e.message;
+      } finally {
+        this.loading = false;
+      }
+    },
+
+    sort(col) {
+      if (this.sortCol === col) {
+        this.sortDir = this.sortDir === 'desc' ? 'asc' : 'desc';
+      } else {
+        this.sortCol = col;
+        this.sortDir = 'desc';
+      }
+    },
+
+    get sorted() {
+      return [...this.data].sort((a, b) => {
+        const av = a[this.sortCol] ?? -Infinity;
+        const bv = b[this.sortCol] ?? -Infinity;
+        return this.sortDir === 'desc' ? bv - av : av - bv;
+      });
+    },
+  };
+}
+</script>
+{% endblock %}

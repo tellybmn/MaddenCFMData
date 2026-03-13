@@ -1,0 +1,342 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div x-data="scoutingReport({{ team_id }}, {{ selected_season or 'null' }})" x-init="load()" class="space-y-6">
+
+  <div x-show="loading" class="flex items-center justify-center py-20">
+    <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-500"></div>
+  </div>
+
+  <template x-if="!loading && report">
+    <div class="space-y-6">
+
+      <!-- Header -->
+      <div class="bg-slate-800 rounded-xl border border-slate-700 p-6">
+        <div class="flex items-center gap-4">
+          <div class="w-12 h-12 rounded-xl bg-brand-700/30 flex items-center justify-center text-2xl">🎯</div>
+          <div>
+            <p class="text-sm text-slate-500 uppercase tracking-wider font-medium">Scouting Report</p>
+            <h1 class="text-3xl font-black" x-text="report.opponent.full_name"></h1>
+            <p class="text-sm text-slate-400 mt-1" x-text="report.opponent.division"></p>
+          </div>
+          <div class="ml-auto">
+            <a :href="'/teams/' + report.opponent.team_id"
+              class="bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+              Team Page →
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <!-- Strengths & Weaknesses -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div class="bg-slate-800 rounded-xl border border-slate-700 p-4">
+          <h2 class="font-bold text-brand-500 mb-3 flex items-center gap-2">
+            <span>💪</span> Strengths
+          </h2>
+          <div x-show="report.strengths.length === 0" class="text-slate-500 text-sm">No significant strengths identified yet.</div>
+          <div class="space-y-2">
+            <template x-for="s in report.strengths" :key="s.category">
+              <div class="flex items-center justify-between py-2 border-b border-slate-700/50">
+                <span class="text-sm text-slate-300" x-text="s.category"></span>
+                <div class="text-right">
+                  <span class="font-bold text-brand-400" x-text="typeof s.value === 'number' ? s.value.toFixed(1) : s.value"></span>
+                  <span class="text-xs text-brand-500 ml-1" x-text="s.vs_avg > 0 ? '(+' + s.vs_avg.toFixed(1) + ' vs avg)' : ''"></span>
+                </div>
+              </div>
+            </template>
+          </div>
+        </div>
+        <div class="bg-slate-800 rounded-xl border border-slate-700 p-4">
+          <h2 class="font-bold text-red-400 mb-3 flex items-center gap-2">
+            <span>⚠️</span> Weaknesses (Exploit These)
+          </h2>
+          <div x-show="report.weaknesses.length === 0" class="text-slate-500 text-sm">No significant weaknesses identified yet.</div>
+          <div class="space-y-2">
+            <template x-for="w in report.weaknesses" :key="w.category">
+              <div class="flex items-center justify-between py-2 border-b border-slate-700/50">
+                <span class="text-sm text-slate-300" x-text="w.category"></span>
+                <div class="text-right">
+                  <span class="font-bold text-red-400" x-text="typeof w.value === 'number' ? w.value.toFixed(1) : w.value"></span>
+                  <span class="text-xs text-red-500 ml-1" x-text="w.vs_avg < 0 ? '(' + w.vs_avg.toFixed(1) + ' vs avg)' : ''"></span>
+                </div>
+              </div>
+            </template>
+          </div>
+        </div>
+      </div>
+
+      <!-- Offensive / Defensive tendencies -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <!-- Offense -->
+        <div class="bg-slate-800 rounded-xl border border-slate-700 p-4">
+          <h2 class="font-bold text-slate-200 mb-1">Offensive Tendencies</h2>
+          <div class="mb-3">
+            <span class="badge-dev"
+              :class="(report.offensive_tendencies.playcall_tendency||'').includes('Pass') ? 'bg-blue-900/50 text-blue-300' :
+                      (report.offensive_tendencies.playcall_tendency||'').includes('Run') ? 'bg-orange-900/50 text-orange-300' :
+                      'bg-slate-700 text-slate-400'"
+              x-text="report.offensive_tendencies.playcall_tendency || '—'"></span>
+          </div>
+          <div class="space-y-1">
+            <template x-for="[label, val, cmp] in offTendencyRows()" :key="label">
+              <div class="flex items-center justify-between py-1.5 border-b border-slate-700/40">
+                <span class="text-sm text-slate-400" x-text="label"></span>
+                <div class="flex items-center gap-2">
+                  <span class="font-medium text-white text-sm" x-text="val || '—'"></span>
+                  <span x-show="cmp" class="text-xs"
+                    :class="cmp && cmp.better ? 'text-brand-500' : 'text-red-400'"
+                    x-text="cmp ? (cmp.better ? '▲' : '▼') + Math.abs(cmp.diff).toFixed(1) : ''"></span>
+                </div>
+              </div>
+            </template>
+          </div>
+        </div>
+
+        <!-- Defense -->
+        <div class="bg-slate-800 rounded-xl border border-slate-700 p-4">
+          <h2 class="font-bold text-slate-200 mb-1">Defensive Tendencies</h2>
+          <div class="mb-3">
+            <span class="badge-dev bg-slate-700 text-slate-300"
+              x-text="report.defensive_tendencies.pass_rush_tendency || '—'"></span>
+          </div>
+          <div class="space-y-1">
+            <template x-for="[label, val, cmp] in defTendencyRows()" :key="label">
+              <div class="flex items-center justify-between py-1.5 border-b border-slate-700/40">
+                <span class="text-sm text-slate-400" x-text="label"></span>
+                <div class="flex items-center gap-2">
+                  <span class="font-medium text-white text-sm" x-text="val || '—'"></span>
+                  <span x-show="cmp" class="text-xs"
+                    :class="cmp && cmp.better ? 'text-brand-500' : 'text-red-400'"
+                    x-text="cmp ? (cmp.better ? '▲' : '▼') + Math.abs(cmp.diff).toFixed(1) : ''"></span>
+                </div>
+              </div>
+            </template>
+          </div>
+        </div>
+      </div>
+
+      <!-- Key Threats -->
+      <div class="bg-slate-800 rounded-xl border border-slate-700 p-4">
+        <h2 class="font-bold text-slate-200 mb-4">Key Threats to Watch</h2>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+
+          <!-- Top Overall -->
+          <div>
+            <h3 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Top Overall</h3>
+            <div class="space-y-2">
+              <template x-for="p in (report.key_threats.top_overall||[])" :key="p.player_id">
+                <div class="flex items-center gap-2">
+                  <span class="font-black text-lg"
+                    :class="(p.overall||0)>=90?'text-yellow-400':(p.overall||0)>=80?'text-brand-500':'text-slate-400'"
+                    x-text="p.overall||'—'"></span>
+                  <div>
+                    <a :href="'/players/'+p.player_id" class="text-sm font-medium hover:text-brand-500 transition-colors" x-text="p.name"></a>
+                    <div class="text-xs text-slate-500" x-text="p.position"></div>
+                  </div>
+                </div>
+              </template>
+            </div>
+          </div>
+
+          <!-- QBs -->
+          <div x-show="(report.key_threats.qbs||[]).length > 0">
+            <h3 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Quarterback</h3>
+            <div class="space-y-2">
+              <template x-for="p in (report.key_threats.qbs||[])" :key="p.player_id">
+                <div>
+                  <a :href="'/players/'+p.player_id" class="text-sm font-medium hover:text-brand-500 transition-colors" x-text="p.name"></a>
+                  <div class="text-xs text-slate-500" x-text="'ANY/A: ' + (p.any_a ? p.any_a.toFixed(2) : '—')"></div>
+                </div>
+              </template>
+            </div>
+          </div>
+
+          <!-- RBs -->
+          <div x-show="(report.key_threats.rbs||[]).length > 0">
+            <h3 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Backfield</h3>
+            <div class="space-y-2">
+              <template x-for="p in (report.key_threats.rbs||[])" :key="p.player_id">
+                <div>
+                  <a :href="'/players/'+p.player_id" class="text-sm font-medium hover:text-brand-500 transition-colors" x-text="p.name"></a>
+                  <div class="text-xs text-slate-500" x-text="'YPC: ' + (p.ypc ? p.ypc.toFixed(1) : '—')"></div>
+                </div>
+              </template>
+            </div>
+          </div>
+
+          <!-- Receivers -->
+          <div x-show="(report.key_threats.receivers||[]).length > 0">
+            <h3 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Pass Catchers</h3>
+            <div class="space-y-2">
+              <template x-for="p in (report.key_threats.receivers||[])" :key="p.player_id">
+                <div>
+                  <a :href="'/players/'+p.player_id" class="text-sm font-medium hover:text-brand-500 transition-colors" x-text="p.name"></a>
+                  <div class="text-xs text-slate-500" x-text="'Y/TGT: ' + (p.y_tgt ? p.y_tgt.toFixed(1) : '—')"></div>
+                </div>
+              </template>
+            </div>
+          </div>
+
+          <!-- Pass Rushers -->
+          <div x-show="(report.key_threats.pass_rushers||[]).length > 0">
+            <h3 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Pass Rushers</h3>
+            <div class="space-y-2">
+              <template x-for="p in (report.key_threats.pass_rushers||[])" :key="p.player_id">
+                <div>
+                  <a :href="'/players/'+p.player_id" class="text-sm font-medium hover:text-brand-500 transition-colors" x-text="p.name"></a>
+                  <div class="text-xs text-slate-500" x-text="'Sacks/G: ' + (p.sacks_per_game ? p.sacks_per_game.toFixed(1) : '—')"></div>
+                </div>
+              </template>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Red Zone & Down/Distance -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div class="bg-slate-800 rounded-xl border border-slate-700 p-4">
+          <h2 class="font-bold text-slate-200 mb-3">Red Zone</h2>
+          <div class="flex items-center gap-3 mb-3">
+            <span class="text-4xl font-black"
+              :class="{'text-brand-500': report.red_zone.grade==='Elite','text-blue-400':report.red_zone.grade==='Above Average','text-yellow-400':report.red_zone.grade==='Average','text-red-400':report.red_zone.grade==='Below Average'}"
+              x-text="report.red_zone.rz_td_rate ? report.red_zone.rz_td_rate.toFixed(1)+'%' : '—'"></span>
+            <div>
+              <div class="font-medium text-sm" x-text="report.red_zone.grade || '—'"></div>
+              <div class="text-xs text-slate-500">RZ TD Rate</div>
+            </div>
+          </div>
+          <div class="grid grid-cols-3 gap-3 text-center">
+            <div class="bg-slate-700/50 rounded p-2">
+              <div class="text-xl font-bold" x-text="report.red_zone.rz_trips || 0"></div>
+              <div class="text-xs text-slate-500">Trips</div>
+            </div>
+            <div class="bg-slate-700/50 rounded p-2">
+              <div class="text-xl font-bold text-brand-500" x-text="report.red_zone.rz_tds || 0"></div>
+              <div class="text-xs text-slate-500">TDs</div>
+            </div>
+            <div class="bg-slate-700/50 rounded p-2">
+              <div class="text-xl font-bold text-yellow-400" x-text="report.red_zone.rz_fgs || 0"></div>
+              <div class="text-xs text-slate-500">FGs</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="bg-slate-800 rounded-xl border border-slate-700 p-4">
+          <h2 class="font-bold text-slate-200 mb-3">Turnovers</h2>
+          <div class="grid grid-cols-3 gap-3 text-center mb-3">
+            <div class="bg-slate-700/50 rounded p-2">
+              <div class="text-2xl font-black text-brand-500" x-text="report.turnover_profile.takeaways || 0"></div>
+              <div class="text-xs text-slate-500">Takeaways</div>
+            </div>
+            <div class="bg-slate-700/50 rounded p-2">
+              <div class="text-2xl font-black"
+                :class="(report.turnover_profile.turnover_differential||0)>=0 ? 'text-brand-500' : 'text-red-400'"
+                x-text="(report.turnover_profile.turnover_differential>=0?'+':'')+report.turnover_profile.turnover_differential"></div>
+              <div class="text-xs text-slate-500">Differential</div>
+            </div>
+            <div class="bg-slate-700/50 rounded p-2">
+              <div class="text-2xl font-black text-red-400" x-text="report.turnover_profile.giveaways || 0"></div>
+              <div class="text-xs text-slate-500">Giveaways</div>
+            </div>
+          </div>
+          <div class="text-sm text-slate-400">
+            INTs thrown: <span class="text-white" x-text="report.turnover_profile.ints_thrown||0"></span> ·
+            Fumbles lost: <span class="text-white" x-text="report.turnover_profile.fumbles_lost||0"></span> ·
+            Def INTs: <span class="text-white" x-text="report.turnover_profile.def_ints||0"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Full metric comparison table -->
+      <div class="bg-slate-800 rounded-xl border border-slate-700 overflow-x-auto">
+        <div class="px-4 py-3 border-b border-slate-700 font-semibold text-slate-200">vs League Average</div>
+        <table class="w-full text-sm">
+          <thead><tr class="border-b border-slate-700">
+            <th class="table-header text-left px-4 py-2">Metric</th>
+            <th class="table-header px-3 py-2">Value</th>
+            <th class="table-header px-3 py-2">League Avg</th>
+            <th class="table-header px-3 py-2">vs Avg</th>
+            <th class="table-header px-3 py-2">Grade</th>
+          </tr></thead>
+          <tbody class="divide-y divide-slate-700/50">
+            <template x-for="r in report.metric_comparisons" :key="r.metric">
+              <tr class="hover:bg-slate-700/30 transition-colors">
+                <td class="px-4 py-2 text-slate-400" x-text="r.metric"></td>
+                <td class="stat-cell px-3 py-2 font-medium text-white"
+                  x-text="r.value !== null ? parseFloat(r.value).toFixed(1) : '—'"></td>
+                <td class="stat-cell px-3 py-2 text-slate-500"
+                  x-text="r.league_avg !== null ? parseFloat(r.league_avg).toFixed(1) : '—'"></td>
+                <td class="stat-cell px-3 py-2"
+                  :class="r.vs_avg === null ? '' : r.is_better ? 'text-brand-500' : 'text-red-400'"
+                  x-text="r.vs_avg !== null ? (r.vs_avg > 0 ? '+' : '') + r.vs_avg.toFixed(1) : '—'"></td>
+                <td class="px-3 py-2">
+                  <span x-show="r.is_better !== null" class="badge-dev"
+                    :class="r.is_better ? 'bg-brand-900/50 text-brand-400' : 'bg-red-900/50 text-red-400'"
+                    x-text="r.is_better ? '▲ Better' : '▼ Worse'"></span>
+                </td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+      </div>
+
+    </div>
+  </template>
+
+</div>
+
+{% endblock %}
+{% block scripts %}
+<script>
+function scoutingReport(teamId, si) {
+  return {
+    loading: true,
+    report: null,
+
+    async load() {
+      try {
+        const url = '/api/scouting/' + teamId + (si !== null ? '?season_index=' + si : '');
+        const resp = await fetch(url);
+        this.report = await resp.json();
+      } catch(e) { console.error(e); }
+      finally { this.loading = false; }
+    },
+
+    fmt(v, d=1) {
+      if (v === null || v === undefined) return null;
+      return parseFloat(v).toFixed(d);
+    },
+
+    offTendencyRows() {
+      const o = this.report?.offensive_tendencies || {};
+      return [
+        ['Points/Game', this.fmt(o.points_per_game), o.points_per_game_vs_avg],
+        ['Yards/Play', this.fmt(o.yards_per_play, 2), o.yards_per_play_vs_avg],
+        ['ANY/A', this.fmt(o.any_a, 2), o.any_a_vs_avg],
+        ['Rush YPC', this.fmt(o.rush_ypc, 2), o.rush_ypc_vs_avg],
+        ['Completion%', o.completion_pct ? this.fmt(o.completion_pct)+'%' : null, null],
+        ['Explosive Plays', o.explosive_play_rate ? this.fmt(o.explosive_play_rate)+'%' : null, null],
+        ['Pass Ratio', o.pass_ratio ? this.fmt(o.pass_ratio)+'%' : null, null],
+        ['Scoring Drive%', o.scoring_drive_rate ? this.fmt(o.scoring_drive_rate)+'%' : null, null],
+      ].filter(r => r[1] !== null);
+    },
+
+    defTendencyRows() {
+      const d = this.report?.defensive_tendencies || {};
+      return [
+        ['Points Allowed/G', this.fmt(d.points_allowed_per_game), d.points_allowed_vs_avg],
+        ['Yards Allowed/Play', this.fmt(d.yards_allowed_per_play, 2), d.yards_allowed_vs_avg],
+        ['Sack Rate', d.sack_rate ? this.fmt(d.sack_rate)+'%' : null, d.sack_rate_vs_avg],
+        ['Opp Passer Rating', this.fmt(d.opp_passer_rating), d.opp_passer_rating_vs_avg],
+        ['Opp YPC', this.fmt(d.opp_ypc, 2), d.opp_ypc_vs_avg],
+        ['3rd Down Stop%', d.third_down_stop_rate ? this.fmt(d.third_down_stop_rate)+'%' : null, d.third_down_stop_vs_avg],
+        ['RZ Stop Rate', d.rz_stop_rate ? this.fmt(d.rz_stop_rate)+'%' : null, null],
+        ['Takeaways/G', this.fmt(d.takeaways_per_game, 2), null],
+      ].filter(r => r[1] !== null);
+    },
+  };
+}
+</script>
+{% endblock %}
